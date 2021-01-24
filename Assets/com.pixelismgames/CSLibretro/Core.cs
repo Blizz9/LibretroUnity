@@ -48,6 +48,8 @@ namespace com.PixelismGames.CSLibretro
         private string _libretroDLLPath;
         private IntPtr _libretroDLL;
 
+        private LogCallback _logCallback;
+
         private Stopwatch _frameTimer;
         private long _framePeriodNanoseconds;
         private long _frameLeftoverNanoseconds;
@@ -400,12 +402,12 @@ namespace com.PixelismGames.CSLibretro
                     return (true);
 
                 case EnvironmentCommand.GetLogInterface:
-                    LogCallback logCallbackStruct = new LogCallback();
+                    _logCallback = new LogCallback();
                     if (LogPassthroughHandler == null)
-                        logCallbackStruct.Log = logCallback;
+                        _logCallback.Log = logCallback;
                     else
-                        logCallbackStruct.Log = LogPassthroughHandler;
-                    Marshal.StructureToPtr(logCallbackStruct, data, false);
+                        _logCallback.Log = LogPassthroughHandler;
+                    Marshal.StructureToPtr(_logCallback, data, false);
                     return (true);
 
                 case EnvironmentCommand.GetSaveDirectory:
