@@ -95,6 +95,176 @@ namespace com.PixelismGames.CSLibretro.Controllers
 
         public void Update()
         {
+            checkInputs();
+        }
+
+        public void FixedUpdate()
+        {
+            // this method currently has a fixed timestep (based on NES NTSC timing); the Time.FixedTimestep needs to
+            // be set based on the core's information
+            _core.RunFrame();
+        }
+
+        // the fickle timing of this makes the exact timing of audio in emulators very tough; another solution may need to be found
+        public void OnAudioFilterRead(float[] data, int channels)
+        {
+            int sampleCount = data.Length;
+            float[] sampleBuffer;
+
+            lock (_audioSync)
+            {
+                if (!_audioSampleBuffer.Any())
+                {
+                    return;
+                }
+                else if (_audioSampleBuffer.Count >= sampleCount)
+                {
+                    // this is the easy case, the core has provided us with enough samples, just copy them over
+                    Array.Copy(_audioSampleBuffer.ToArray(), data, sampleCount);
+                    _audioSampleBuffer.RemoveRange(0, sampleCount);
+                    return;
+                }
+
+                // the core has not given us enough samples, copy what is there and attempt to smooth the results
+                sampleBuffer = new float[_audioSampleBuffer.Count];
+                Array.Copy(_audioSampleBuffer.ToArray(), sampleBuffer, _audioSampleBuffer.Count);
+                _audioSampleBuffer.RemoveRange(0, _audioSampleBuffer.Count);
+            }
+
+            // smooth the data by duping (averaging) every X samples so that we have enough samples; there are much
+            // better solutions to this like time stretching
+
+            int frameCount = data.Length / channels;
+            int bufferFrameCount = sampleBuffer.Length / channels;
+
+            double step = (double)frameCount / ((double)frameCount - (double)bufferFrameCount);
+            double start = step / 2;
+
+            List<int> generatedFrames = new List<int>();
+            double cumulativeStep = start;
+            while (cumulativeStep < frameCount)
+            {
+                generatedFrames.Add((int)Math.Floor(cumulativeStep));
+                cumulativeStep += step;
+            }
+
+            int bufferIndex = 0;
+            for (int frameIndex = 0; frameIndex < frameCount; frameIndex++)
+            {
+                int sampleIndex = frameIndex * channels;
+
+                if (generatedFrames.Contains(frameIndex))
+                {
+                    for (int i = 0; i < channels; i++)
+                    {
+                        if (bufferIndex == 0)
+                            data[sampleIndex + i] = sampleBuffer[bufferIndex + i];
+                        else if (bufferIndex == sampleBuffer.Length)
+                            data[sampleIndex + i] = sampleBuffer[bufferIndex - channels + i];
+                        else
+                            data[sampleIndex + i] = (sampleBuffer[bufferIndex - channels + i] + sampleBuffer[bufferIndex + i]) / 2f;
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < channels; i++)
+                        data[sampleIndex + i] = sampleBuffer[bufferIndex + i];
+
+                    bufferIndex += channels;
+                }
+            }
+        }
+
+        #endregion
+
+        #region Handlers
+
+        private void audioSampleBatchHandler(short[] samples)
+        {
+            // this keeps the sample buffer from growing too large (and playing very old samples), but if this is too
+            // small, we'll get a lot of audio chopping (with an attempt to smooth); low = choppy, high = laggy; there
+            // is probably a way to allow this to auto-tune as the core runs
+            const int MAX_AUDIO_SAMPLES = 6144;
+
+            if (!IsMuted)
+            {
+                lock (_audioSync)
+                {
+                    _audioSampleBuffer.AddRange(samples.Select(s => (float)((double)s / (double)short.MaxValue)).ToList());
+                    if (_audioSampleBuffer.Count > MAX_AUDIO_SAMPLES)
+                        _audioSampleBuffer.RemoveRange(0, _audioSampleBuffer.Count - MAX_AUDIO_SAMPLES);
+                }
+            }
+        }
+
+        private void logHandler(LogLevel level, string message)
+        {
+            Debug.Log(string.Format("[{0}] {1}", (int)level, message));
+        }
+
+        private void videoFrameHandler(int width, int height, byte[] frameBuffer)
+        {
+            TextureFormat textureFormat;
+            RenderTextureFormat renderTextureFormat;
+
+            switch (_core.PixelFormat)
+            {
+                case PixelFormat.RGB565:
+                    textureFormat = TextureFormat.RGB565;
+                    renderTextureFormat = RenderTextureFormat.RGB565;
+                    break;
+
+                case PixelFormat.XRGB8888:
+                    textureFormat = TextureFormat.BGRA32;
+                    renderTextureFormat = RenderTextureFormat.BGRA32;
+                    for (int i = 3; i < frameBuffer.Length; i += 4)
+                        frameBuffer[i] = 255;
+                    break;
+
+                default:
+                    textureFormat = TextureFormat.RGBA32;
+                    renderTextureFormat = RenderTextureFormat.RGBAUShort;
+                    break;
+            }
+
+            Texture2D videoFrameTexture = new Texture2D(width, height, textureFormat, false);
+            videoFrameTexture.LoadRawTextureData(frameBuffer);
+            videoFrameTexture.Apply();
+
+            if (_renderer is SpriteRenderer)
+            {
+                SpriteRenderer spriteRenderer = (SpriteRenderer)_renderer;
+
+                if (spriteRenderer.sprite == null)
+                {
+                    spriteRenderer.sprite = Sprite.Create(videoFrameTexture, new Rect(0f, 0f, width, height), new Vector2(0.5f, 0.5f), PIXELS_PER_UNIT);
+                    spriteRenderer.sprite.texture.filterMode = FilterMode.Point;
+                }
+                else
+                {
+                    Graphics.CopyTexture(videoFrameTexture, spriteRenderer.sprite.texture);
+                }
+            }
+            else
+            {
+                if (_renderer.material.mainTexture == null)
+                {
+                    _renderer.material.mainTexture = new RenderTexture(width, height, 0, renderTextureFormat);
+                    _renderer.material.mainTexture.filterMode = FilterMode.Point;
+                }
+                else
+                {
+                    Graphics.CopyTexture(videoFrameTexture, _renderer.material.mainTexture);
+                }
+            }
+        }
+
+        #endregion
+
+        #region Input Routines
+
+        private void checkInputs()
+        {
             List<JoypadInputID> validInputs = new List<JoypadInputID>() { JoypadInputID.Up, JoypadInputID.Down, JoypadInputID.Left, JoypadInputID.Right, JoypadInputID.Start, JoypadInputID.Select, JoypadInputID.A, JoypadInputID.B, JoypadInputID.X, JoypadInputID.Y, JoypadInputID.L, JoypadInputID.R };
             foreach (CSLibretro.Input input in _core.Inputs.Where(i => (i.Port == 0) && (validInputs.Contains(i.JoypadInputID.Value))))
             {
@@ -199,158 +369,6 @@ namespace com.PixelismGames.CSLibretro.Controllers
                                 input.Value = 0;
                         }
                         break;
-                }
-            }
-
-            if (_core.HasFramePeriodElapsed())
-            {
-                _core.RunFrame();
-            }
-        }
-
-        // the fickle timing of this makes the exact timing of audio in emulators very tough; another solution may need to be found
-        public void OnAudioFilterRead(float[] data, int channels)
-        {
-            int sampleCount = data.Length;
-            float[] sampleBuffer;
-
-            lock (_audioSync)
-            {
-                if (!_audioSampleBuffer.Any())
-                {
-                    return;
-                }
-                else if (_audioSampleBuffer.Count >= sampleCount)
-                {
-                    // this is the easy case, the core has provided us with enough samples, just copy them over
-                    Array.Copy(_audioSampleBuffer.ToArray(), data, sampleCount);
-                    _audioSampleBuffer.RemoveRange(0, sampleCount);
-                    return;
-                }
-
-                // the core has not given us enough samples, copy what is there and attempt to smooth the results
-                sampleBuffer = new float[_audioSampleBuffer.Count];
-                Array.Copy(_audioSampleBuffer.ToArray(), sampleBuffer, _audioSampleBuffer.Count);
-                _audioSampleBuffer.RemoveRange(0, _audioSampleBuffer.Count);
-            }
-
-            // smooth the data by duping (averaging) every X samples so that we have enough samples
-            // this ultimately needs to be done via time stretching
-
-            int frameCount = data.Length / channels;
-            int bufferFrameCount = sampleBuffer.Length / channels;
-
-            double step = (double)frameCount / ((double)frameCount - (double)bufferFrameCount);
-            double start = step / 2;
-
-            List<int> generatedFrames = new List<int>();
-            double cumulativeStep = start;
-            while (cumulativeStep < frameCount)
-            {
-                generatedFrames.Add((int)Math.Floor(cumulativeStep));
-                cumulativeStep += step;
-            }
-
-            int bufferIndex = 0;
-            for (int frameIndex = 0; frameIndex < frameCount; frameIndex++)
-            {
-                int sampleIndex = frameIndex * channels;
-
-                if (generatedFrames.Contains(frameIndex))
-                {
-                    for (int i = 0; i < channels; i++)
-                    {
-                        if (bufferIndex == 0)
-                            data[sampleIndex + i] = sampleBuffer[bufferIndex + i];
-                        else if (bufferIndex == sampleBuffer.Length)
-                            data[sampleIndex + i] = sampleBuffer[bufferIndex - channels + i];
-                        else
-                            data[sampleIndex + i] = (sampleBuffer[bufferIndex - channels + i] + sampleBuffer[bufferIndex + i]) / 2f;
-                    }
-                }
-                else
-                {
-                    for (int i = 0; i < channels; i++)
-                        data[sampleIndex + i] = sampleBuffer[bufferIndex + i];
-
-                    bufferIndex += channels;
-                }
-            }
-        }
-
-        #endregion
-
-        #region Handlers
-
-        private void audioSampleBatchHandler(short[] samples)
-        {
-            if (!IsMuted)
-            {
-                lock (_audioSync)
-                {
-                    _audioSampleBuffer.AddRange(samples.Select(s => (float)((double)s / (double)short.MaxValue)).ToList());
-                }
-            }
-        }
-
-        private void logHandler(LogLevel level, string message)
-        {
-            Debug.Log(string.Format("[{0}] {1}", (int)level, message));
-        }
-
-        private void videoFrameHandler(int width, int height, byte[] frameBuffer)
-        {
-            TextureFormat textureFormat;
-            RenderTextureFormat renderTextureFormat;
-
-            switch (_core.PixelFormat)
-            {
-                case PixelFormat.RGB565:
-                    textureFormat = TextureFormat.RGB565;
-                    renderTextureFormat = RenderTextureFormat.RGB565;
-                    break;
-
-                case PixelFormat.XRGB8888:
-                    textureFormat = TextureFormat.BGRA32;
-                    renderTextureFormat = RenderTextureFormat.BGRA32;
-                    for (int i = 3; i < frameBuffer.Length; i += 4)
-                        frameBuffer[i] = 255;
-                    break;
-
-                default:
-                    textureFormat = TextureFormat.RGBA32;
-                    renderTextureFormat = RenderTextureFormat.RGBAUShort;
-                    break;
-            }
-
-            Texture2D videoFrameTexture = new Texture2D(width, height, textureFormat, false);
-            videoFrameTexture.LoadRawTextureData(frameBuffer);
-            videoFrameTexture.Apply();
-
-            if (_renderer is SpriteRenderer)
-            {
-                SpriteRenderer spriteRenderer = (SpriteRenderer)_renderer;
-
-                if (spriteRenderer.sprite == null)
-                {
-                    spriteRenderer.sprite = Sprite.Create(videoFrameTexture, new Rect(0f, 0f, width, height), new Vector2(0.5f, 0.5f), PIXELS_PER_UNIT);
-                    spriteRenderer.sprite.texture.filterMode = FilterMode.Point;
-                }
-                else
-                {
-                    Graphics.CopyTexture(videoFrameTexture, spriteRenderer.sprite.texture);
-                }
-            }
-            else
-            {
-                if (_renderer.material.mainTexture == null)
-                {
-                    _renderer.material.mainTexture = new RenderTexture(width, height, 0, renderTextureFormat);
-                    _renderer.material.mainTexture.filterMode = FilterMode.Point;
-                }
-                else
-                {
-                    Graphics.CopyTexture(videoFrameTexture, _renderer.material.mainTexture);
                 }
             }
         }
