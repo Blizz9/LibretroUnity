@@ -201,11 +201,11 @@ namespace com.PixelismGames.CSLibretro.Controllers
                         break;
                 }
             }
-        }
 
-        public void FixedUpdate()
-        {
-            _core.RunFrame();
+            if (_core.HasFramePeriodElapsed())
+            {
+                _core.RunFrame();
+            }
         }
 
         // the fickle timing of this makes the exact timing of audio in emulators very tough; another solution may need to be found
