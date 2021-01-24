@@ -1,0 +1,15 @@
+.DS_Store
+
+*.csproj
+*.sln
+*.userprefs
+.vs
+.vsconfig
+obj
+
+Library
+Logs
+Temp
+
+Contrib
+
