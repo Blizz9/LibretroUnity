@@ -238,7 +238,8 @@ namespace com.PixelismGames.CSLibretro.Controllers
             {
                 SpriteRenderer spriteRenderer = (SpriteRenderer)_renderer;
 
-                if (spriteRenderer.sprite == null)
+                // sometimes the resolution can change mid running of the game
+                if ((spriteRenderer.sprite == null) || (spriteRenderer.sprite.texture.width != width) || (spriteRenderer.sprite.texture.height != height))
                 {
                     spriteRenderer.sprite = Sprite.Create(videoFrameTexture, new Rect(0f, 0f, width, height), new Vector2(0.5f, 0.5f), PIXELS_PER_UNIT);
                     spriteRenderer.sprite.texture.filterMode = FilterMode.Point;
@@ -250,7 +251,8 @@ namespace com.PixelismGames.CSLibretro.Controllers
             }
             else
             {
-                if (_renderer.material.mainTexture == null)
+                // sometimes the resolution can change mid running of the game
+                if ((_renderer.material.mainTexture == null) || (_renderer.material.mainTexture.width != width) || (_renderer.material.mainTexture.height != height))
                 {
                     _renderer.material.mainTexture = new RenderTexture(width, height, 0, renderTextureFormat);
                     _renderer.material.mainTexture.filterMode = FilterMode.Point;
