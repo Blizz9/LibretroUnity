@@ -84,6 +84,8 @@ namespace com.PixelismGames.CSLibretro.Controllers
 
             _core.Load(ROMPath);
 
+            Time.fixedDeltaTime = (float)1 / (float)_core.FrameRate;
+
             AudioConfiguration audioConfiguration = AudioSettings.GetConfiguration();
             audioConfiguration.sampleRate = (int)_core.AudioSampleRate;
             AudioSettings.Reset(audioConfiguration);
