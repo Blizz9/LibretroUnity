@@ -21,11 +21,13 @@ namespace com.PixelismGames.CSLibretro.Controllers
 
         #if UNITY_STANDALONE_OSX
         public string CorePath = @"./Contrib/Cores/fceumm_libretro.dylib";
+        public string ROMPath = @"./Contrib/ROMs/smb.nes";
+        public string SystemDirectory = @"./Contrib/System/";
         #else
         public string CorePath = @".\Contrib\Cores\fceumm_libretro.dll";
-        #endif
         public string ROMPath = @".\Contrib\ROMs\smb.nes";
         public string SystemDirectory = @".\Contrib\System\";
+        #endif
         public string XAxis = "Horizontal";
         public string YAxis = "Vertical";
         public string AButton = "Fire2";
