@@ -268,8 +268,9 @@ namespace com.PixelismGames.CSLibretro.Controllers
 
         private void checkInputs()
         {
-            List<JoypadInputID> validInputs = new List<JoypadInputID>() { JoypadInputID.Up, JoypadInputID.Down, JoypadInputID.Left, JoypadInputID.Right, JoypadInputID.Start, JoypadInputID.Select, JoypadInputID.A, JoypadInputID.B, JoypadInputID.X, JoypadInputID.Y, JoypadInputID.L, JoypadInputID.R };
-            foreach (CSLibretro.Input input in _core.Inputs.Where(i => (i.Port == 0) && (validInputs.Contains(i.JoypadInputID.Value))))
+            List<JoypadInputID> validInputs = new List<JoypadInputID>() { JoypadInputID.Up, JoypadInputID.Down, JoypadInputID.Left, JoypadInputID.Right, JoypadInputID.Start, JoypadInputID.Select, JoypadInputID.A, JoypadInputID.B, JoypadInputID.X, JoypadInputID.Y, JoypadInputID.L, JoypadInputID.R, JoypadInputID.L2, JoypadInputID.R2, JoypadInputID.L3, JoypadInputID.R3 };
+            List<Input> inputsToCheck = _core.Inputs.Where(i => (i.Port == 0) && (i.Device == Device.Joypad) && (validInputs.Contains(i.JoypadInputID.Value))).ToList();
+            foreach (Input input in inputsToCheck)
             {
                 switch (input.JoypadInputID)
                 {
