@@ -45,8 +45,8 @@ namespace com.PixelismGames.CSLibretro
 
 		private OS _os;
 
-        private string _libretroDLLPath;
         private IntPtr _libretroDLL;
+        private string _systemDirectoryPath;
 
         private LogCallback _logCallback;
 
@@ -131,9 +131,10 @@ namespace com.PixelismGames.CSLibretro
 
         #endregion
 
-		public Core(OS os, string libretroDLLPath)
+		public Core(OS os, string libretroDLLPath, string systemDirectoryPath)
         {
 			_os = os;
+            _systemDirectoryPath = systemDirectoryPath;
 
             _frameTimer = new Stopwatch();
 
@@ -142,7 +143,6 @@ namespace com.PixelismGames.CSLibretro
             Variables = new List<Variable>();
             Inputs = new List<Input>();
 
-            _libretroDLLPath = libretroDLLPath;
 			if (_os == OS.OSX)
                 _libretroDLL = OSXAPI.dlopen(libretroDLLPath, 2);
 			else
@@ -351,7 +351,7 @@ namespace com.PixelismGames.CSLibretro
                     return (true);
 
                 case EnvironmentCommand.GetSystemDirectory:
-                    Marshal.WriteIntPtr(data, Marshal.StringToHGlobalAnsi(Directory.GetCurrentDirectory()));
+                    Marshal.WriteIntPtr(data, Marshal.StringToHGlobalAnsi(_systemDirectoryPath));
                     return (true);
 
                 case EnvironmentCommand.SetPixelFormat:

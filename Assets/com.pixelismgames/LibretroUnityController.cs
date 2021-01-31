@@ -25,6 +25,7 @@ namespace com.PixelismGames.CSLibretro.Controllers
         public string CorePath = @".\Contrib\Cores\fceumm_libretro.dll";
         #endif
         public string ROMPath = @".\Contrib\ROMs\smb.nes";
+        public string SystemDirectory = @".\Contrib\System\";
         public string XAxis = "Horizontal";
         public string YAxis = "Vertical";
         public string AButton = "Fire2";
@@ -72,9 +73,9 @@ namespace com.PixelismGames.CSLibretro.Controllers
         public void Start()
         {
             #if UNITY_STANDALONE_OSX
-            _core = new Core(OS.OSX, CorePath);
+            _core = new Core(OS.OSX, CorePath, SystemDirectory);
             #else
-            _core = new Core(OS.Windows, CorePath);
+            _core = new Core(OS.Windows, CorePath, SystemDirectory);
             #endif
 
             _core.AudioSampleBatchHandler += audioSampleBatchHandler;
